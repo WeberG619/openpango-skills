@@ -1,8 +1,22 @@
 ---
 name: orchestration
-description: "Orchestrates multi-agent task workflows by parsing user requests and delegating to specialized sub-agents."
+description: "OpenClaw Manager Agent — session-based sub-agent router with spawn, dispatch, status, output, kill, and wait lifecycle management."
+version: "2.0.0"
 user-invocable: true
-metadata: {"openclaw":{"emoji":"🎯","skillKey":"openpango-orchestration"}}
+metadata:
+  capabilities:
+    - orchestration/spawn
+    - orchestration/dispatch
+    - orchestration/status
+    - orchestration/output
+    - orchestration/kill
+    - orchestration/wait
+    - orchestration/list
+  author: "WeberG619"
+  license: "MIT"
+  openclaw:
+    emoji: "🎯"
+    skillKey: "openpango-orchestration"
 ---
 
 ## Cross-Skill Integration
