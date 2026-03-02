@@ -1,6 +1,7 @@
 ---
 name: memory
-description: "A distributed, Git-backed graph issue tracker using a local SQLite read-cache."
+description: "Event-sourced task memory (Beads) + semantic vector search for long-term agent recall."
+version: "2.0.0"
 user-invocable: true
 metadata: {"openclaw":{"emoji":"🧠","skillKey":"openpango-memory"}}
 ---
@@ -11,7 +12,10 @@ This skill integrates with the Openpango ecosystem:
 - **Orchestration**: Tracks tasks using this memory skill.
 - **Self-Improvement**: Can create tasks for tracking new learnings.
 - **Persistent State**: Shared workspace files at `~/.openclaw/workspace/` (AGENTS.md, SOUL.md, TOOLS.md, .learnings/).
+- **Semantic Recall**: Agent outputs, user inputs, and research are embedded and stored in `~/.openclaw/workspace/vectors.json`.
 - **Real-time Coordination**: OpenClaw sessions API (sessions_send, sessions_spawn) referenced in orchestration SKILL.md.
+
+---
 
 # Beads Memory Architecture
 
@@ -60,4 +64,89 @@ python3 skills/memory/memory_manager.py get_ready_tasks
 
 # 7. See the full picture
 python3 skills/memory/memory_manager.py list_tasks
+```
+
+---
+
+# Semantic Memory (Vector Search)
+
+The semantic layer enables **long-term recall** of past conversations, agent outputs, research notes, and code using vector similarity search. It works with zero external dependencies.
+
+## Architecture
+
+| Component | File | Role |
+|-----------|------|------|
+| Chunker + Embedder | `embeddings.py` | Split text into ~500-char chunks, embed with TF-IDF (default) or external API |
+| Vector Store | `vector_store.py` | JSON-backed storage with cosine similarity search |
+| Semantic API | `semantic_search.py` | `ingest()` and `recall()` functions + CLI |
+
+**Storage:** `~/.openclaw/workspace/vectors.json`
+
+## Embedding Backends
+
+| Backend | Activation | Quality | External Dep? |
+|---------|-----------|---------|---------------|
+| TF-IDF (default) | No config needed | Good for keyword overlap | None — pure stdlib |
+| Ollama | `EMBEDDING_BACKEND=ollama` | Excellent | Local Ollama server |
+| OpenAI | `EMBEDDING_BACKEND=openai` + `OPENAI_API_KEY` | Best | OpenAI API call |
+
+The system gracefully falls back: `openai -> ollama -> tfidf`.
+
+## Python API
+
+```python
+from skills.memory.semantic_search import ingest, recall
+
+# Ingest any text (chunked automatically at ~500 chars with 80-char overlap)
+ingest(
+    "We discovered that using async generators reduces memory usage by 40%.",
+    source="agent_output",       # label: user_input | agent_output | research | code | conversation
+    session_id="session-abc",    # optional — for grouping or filtering
+    tags=["performance", "async"]
+)
+
+# Recall the top-5 most relevant chunks for a query
+results = recall(
+    "memory optimization techniques",
+    top_k=5,
+    min_score=0.1,          # optional cosine similarity threshold
+    source_filter="research" # optional — restrict to a source type
+)
+
+for r in results["results"]:
+    print(f"[{r['score']:.3f}] {r['text'][:120]}")
+    print(f"  source={r['metadata']['source']}  ts={r['metadata']['timestamp']}")
+```
+
+## CLI
+
+```bash
+# Ingest text
+python3 skills/memory/semantic_search.py ingest "Agent found rate limit on API." --source agent_output
+
+# Recall
+python3 skills/memory/semantic_search.py recall "rate limit" --top-k 5
+
+# Filter by source
+python3 skills/memory/semantic_search.py recall "async generators" --source research --min-score 0.2
+
+# Statistics
+python3 skills/memory/semantic_search.py stats
+
+# Clear all vectors
+python3 skills/memory/semantic_search.py clear
+```
+
+## When to Use Semantic Recall
+
+- Before starting a task: `recall("task description")` — surface prior knowledge
+- After completing work: `ingest(output, source="agent_output")` — persist findings
+- At conversation start: `ingest(user_message, source="user_input")` — build context
+- Research phase: `ingest(findings, source="research", tags=["domain"])` — index learnings
+
+## Running Tests
+
+```bash
+python3 skills/memory/test_semantic.py
+# Runs 57 tests covering chunking, embeddings, vector store, ingest, recall, CLI
 ```
